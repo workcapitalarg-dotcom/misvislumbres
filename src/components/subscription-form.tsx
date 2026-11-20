@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -20,6 +20,8 @@ export default function SubscriptionForm() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const busyRef = useRef(false);
+  const completedRef = useRef(false);
 
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("session");
@@ -102,8 +104,9 @@ export default function SubscriptionForm() {
           },
           onSubmit: async (event: Event) => {
             event.preventDefault();
-            if (busy || completed) return;
+            if (busyRef.current || completedRef.current) return;
 
+            busyRef.current = true;
             setBusy(true);
             setMessage("Procesando la autorización…");
 
@@ -127,6 +130,7 @@ export default function SubscriptionForm() {
                 throw new Error(result.error || "Mercado Pago no pudo crear la suscripción.");
               }
 
+              completedRef.current = true;
               setCompleted(true);
               setMessage(
                 result.status === "authorized"
@@ -140,6 +144,7 @@ export default function SubscriptionForm() {
                   : "Ocurrió un error al procesar la suscripción.",
               );
             } finally {
+              busyRef.current = false;
               setBusy(false);
             }
           },
@@ -155,7 +160,7 @@ export default function SubscriptionForm() {
       cancelled = true;
       form?.unmount?.();
     };
-  }, [ready, session, busy, completed]);
+  }, [ready, session]);
 
   return (
     <div>

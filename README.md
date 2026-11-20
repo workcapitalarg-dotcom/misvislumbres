@@ -2,10 +2,54 @@
 
 Aplicación Next.js para tokenizar tarjetas con Mercado Pago.js y crear suscripciones individuales asociadas al Telegram ID.
 
-## Variables de entorno
-- NEXT_PUBLIC_MP_PUBLIC_KEY: clave pública de Mercado Pago.
-- MP_ACCESS_TOKEN: Access Token privado, solo servidor.
-- MP_PREAPPROVAL_PLAN_ID: ID del plan mensual.
-- CHECKOUT_SIGNING_SECRET: secreto compartido para firmar JWT HS256 desde n8n.
+## Variables de entorno en Vercel
 
-La página espera un parámetro ?session=<JWT>. El JWT debe usar HS256, issuer misvislumbres-n8n, audience misvislumbres-checkout, y claims telegram_id, email, iat y exp. No se aceptan identificadores sin firma.
+- `NEXT_PUBLIC_MP_PUBLIC_KEY`: clave pública de Mercado Pago (publicable).
+- `MP_ACCESS_TOKEN`: Access Token privado de Mercado Pago. Solo servidor.
+- `MP_PREAPPROVAL_PLAN_ID`: ID del plan mensual. El endpoint comprueba que el plan esté configurado en ARS 3.000, con frecuencia de 1 mes.
+- `CHECKOUT_SIGNING_SECRET`: secreto compartido para validar JWT HS256 emitidos por n8n.
+
+No guardes credenciales reales en GitHub ni en variables `NEXT_PUBLIC_`, excepto la clave pública.
+
+## Sesión de checkout
+
+La página espera `?session=<JWT>`. El JWT debe usar HS256, issuer `misvislumbres-n8n`, audience `misvislumbres-checkout`, y claims `telegram_id`, `email`, `iat` y `exp`. No se aceptan identificadores sin firma.
+
+## Flujo de pago y acceso
+
+1. n8n emite el JWT firmado y entrega el enlace de checkout al usuario por Telegram.
+2. Next.js valida el JWT antes de mostrar el formulario.
+3. Mercado Pago.js tokeniza los datos de tarjeta en el navegador. Los datos sensibles de tarjeta no pasan por el backend propio.
+4. Next.js crea la suscripción asociada al plan con `card_token_id` y estado solicitado `authorized`.
+5. La respuesta de creación de suscripción no habilita por sí sola el acceso al canal.
+6. El workflow de n8n debe verificar la notificación y el primer pago en Mercado Pago antes de activar al usuario y generar la invitación de Telegram.
+
+## Plan de suscripción acordado
+
+- Plan: `020391faf012494bb60cc9f1da6dede2`
+- Importe: ARS 3.000
+- Frecuencia: mensual
+- Renovación: automática
+
+El endpoint consulta el plan en Mercado Pago antes de crear la suscripción y rechaza la operación si el importe, moneda o frecuencia no coinciden con este acuerdo.
+
+## Webhooks y n8n
+
+El workflow existente de n8n debe estar activo y utilizar su URL de producción (no la URL `webhook-test`). El webhook debe procesar los eventos de suscripción y pagos recurrentes, consultar el recurso correspondiente en la API de Mercado Pago y conceder acceso solo después de verificar el pago.
+
+Para la suscripción:
+- `subscription_preapproval`: consultar el recurso de suscripción.
+- `subscription_authorized_payment`: consultar el pago recurrente autorizado y vincularlo con la suscripción.
+
+No habilitar el acceso basándose únicamente en el estado `authorized` de la suscripción.
+
+## Desarrollo local
+
+```bash
+npm install
+npm run dev
+```
+
+## Despliegue
+
+Conectar este repositorio a Vercel y cargar las variables de entorno en el proyecto. Después de cada cambio en la rama conectada, Vercel ejecutará el build y el despliegue.
